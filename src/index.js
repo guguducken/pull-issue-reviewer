@@ -11,6 +11,11 @@ const reviewers = core.getInput(`reviewers`, { required: true });
 const arr_reviewers = reviewers.split(",");
 const mentioned_list = mentions.split(",");
 
+github.context.repo = {
+    repo: "matrixone",
+    owner: "matrixorigin"
+}
+
 
 const oc = github.getOctokit(token);
 
@@ -127,6 +132,7 @@ async function notice_WeCom(type, message) {
                 const man = mentioned_list[i];
                 message += `<@${man}>`
             }
+            core.info(`Notice message: ${message}`);
             notice_payload = {
                 msgtype: `markdown`,
                 markdown: {
@@ -137,12 +143,13 @@ async function notice_WeCom(type, message) {
         default:
             break;
     }
-    let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
-        Headers: {
-            'Content-Type': 'application/json'
-        }
-    });
-    return resp.status;
+    // let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
+    //     Headers: {
+    //         'Content-Type': 'application/json'
+    //     }
+    // });
+    // return resp.status;
+    return 200
 }
 
 //reviewers是一个数组
@@ -151,14 +158,15 @@ async function addReviewers(number, reviewers) {
         return true
     }
     let str_reviewers = JSON.stringify({ reviewers: reviewers })
-    let { status: status } = await oc.rest.pulls.requestReviewers({
-        ...github.context.repo,
-        pull_number: number,
-        reviewers: str_reviewers
-    });
-    if (status != 201) {
-        return false;
-    }
+    core.info(`Add reviewers ${reviewers} to pull request ${number}`);
+    // let { status: status } = await oc.rest.pulls.requestReviewers({
+    //     ...github.context.repo,
+    //     pull_number: number,
+    //     reviewers: str_reviewers
+    // });
+    // if (status != 201) {
+    //     return false;
+    // }
     return true;
 }
 
