@@ -203,11 +203,13 @@ async function reviewersHasCheck(number) {
         pull_number: number
     });
 
+    let all = new Set();
     let arr = new Array();
     for (let i = 0; i < arr_reviewers.length; i++) {
         const reviewer = arr_reviewers[i];
         for (let j = 0; j < pull.users.length; j++) {
             const user = pull.users[j];
+            all.add(user.login);
             if (user.login == reviewer) {
                 break;
             }
@@ -216,6 +218,7 @@ async function reviewersHasCheck(number) {
             }
         }
     }
+    core.info(`All reviewers is: ` + Array.from(all));
     return arr
 }
 
