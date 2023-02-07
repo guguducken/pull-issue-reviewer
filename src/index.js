@@ -16,116 +16,94 @@ const repo = {
     owner: "matrixorigin"
 }
 
+const pull_request = github.context.payload.pull_request;
+
 
 const oc = github.getOctokit(token);
 
 async function run() {
-    let page = 1;
-    let per_page = 100;
-    let num_try = 0;
+    // if (pull_request === undefined) {
+    //     throw new Error(`This workflow is not triag by pull request, check again`);
+    // }
+    // let number = pull_request.number;
+    let number = 7899;
+
     core.info(`Start to find releate pull request...`)
-    while (true) {
-        core.info(`Start to fetch the date of page ${page} >>>>>>`);
-        let prs = await getPRs(page, per_page);
-        if (prs === null) {
-            if (num_try == 10) {
-                throw new Error(`Get pull request timeout for ten times, please check your internat`);
-            }
-            num_try++
-            core.info(`Get pull request timeout, will try again... ${num_try}`);
+    core.info(`Start to fetch the date of PR ${number} >>>>>>`);
+    let pr = await getPR(number);
+
+    core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
+
+    if (pr.draft) {
+        core.info(`This pr is draft... skip`);
+        return;
+    }
+    if (pr.body === null) {
+        core.info(`There is no body in is pr ${pr.number}..... skip`);
+        return;
+    }
+    let num_issues = getReleatedIssueNumber(pr.body);
+
+    if (num_issues.length != 0) {
+        core.info(`Get releated issues total: ${num_issues.length}, is ${num_issues}`);
+    } else {
+        core.info(`Get releated issues total: ${num_issues.length}, so skip this pull`);
+        return;
+    }
+    let same = false;
+    for (let j = 0; j < num_issues.length; j++) {
+        const num = num_issues[j];
+        let flag = false;
+        let issue = await getIssueDetails(num);
+        if (issue.pull_request !== undefined) {
+            core.info(`This is a pr -- ${num}... skip`);
             continue;
         }
-        num_try = 0;
-        core.info(`Get total pull: ${prs.length} of page ${page}`);
-        //对每一个pr进行处理
-        for (let i = 0; i < prs.length; i++) {
-            const pr = prs[i];
-
-            core.info(`\n${i + 1}`);
-            core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
-
-            if (pr.draft) {
-                core.info(`This pr is draft... skip`);
-                continue;
-            }
-            if (pr.body === null) {
-                core.info(`There is no body in is pr ${pr.number}..... skip`);
-                continue;
-            }
-            let num_issues = getReleatedIssueNumber(pr.body);
-
-            if (num_issues.length != 0) {
-                core.info(`Get releated issues total: ${num_issues.length}, is ${num_issues}`);
-            } else {
-                core.info(`Get releated issues total: ${num_issues.length}, so skip this pull`);
-                continue;
-            }
-            let same = false;
-            for (let j = 0; j < num_issues.length; j++) {
-                const num = num_issues[j];
-                let flag = false;
-                let issue = await getIssueDetails(num);
-                if (issue.pull_request !== undefined) {
-                    core.info(`This is a pr -- ${num}... skip`);
-                    continue;
-                }
-                for (let k = 0; k < issue.data.labels.length; k++) {
-                    const label = issue.data.labels[k];
-                    if (label.id == id_label) {
-                        let sum = 0
-                        same = true;
-                        //增加reviewer
-                        while (await addReviewers(pr.number, await reviewersHasCheck(pr.number)) == false) {
-                            sum++
-                            if (sum == 10) {
-                                core.info(`Try add reviewers for pull ${pr.number} and issue ${num} ten times... skip`);
-                                break;
-                            }
-                        }
-                        //编写message
-                        let mess = `This PR ${pr.number} needs to be well documented and its associated issue is ${num} `
-
-
-                        //企业微信通知
-                        sum = 0;
-                        while (await notice_WeCom(`markdown`, mess) != 200) {
-                            sum++;
-                            if (sum == 10) {
-                                core.info(`Try to notice by WeCom for pull ${pr.number} and issue ${num} ten times... skip`);
-                                break;
-                            }
-                        }
-                        flag = true;
+        for (let k = 0; k < issue.data.labels.length; k++) {
+            const label = issue.data.labels[k];
+            if (label.id == id_label) {
+                let sum = 0
+                same = true;
+                //增加reviewer
+                while (await addReviewers(pr.number, await reviewersHasCheck(pr.number)) == false) {
+                    sum++
+                    if (sum == 10) {
+                        core.info(`Try add reviewers for pull ${pr.number} and issue ${num} ten times... skip`);
                         break;
                     }
                 }
-                if (flag) {
-                    break;
+                //编写message
+                let mess = `This PR ${pr.number} needs to be well documented and its associated issue is ${num} `
+
+
+                //企业微信通知
+                sum = 0;
+                while (await notice_WeCom(`markdown`, mess) != 200) {
+                    sum++;
+                    if (sum == 10) {
+                        core.info(`Try to notice by WeCom for pull ${pr.number} and issue ${num} ten times... skip`);
+                        break;
+                    }
                 }
-            }
-            if (!same) {
-                core.info(`There is no set label for the corresponding issue`);
+                flag = true;
+                break;
             }
         }
-
-        if (prs.length < per_page) {
-            core.info(`All pull request is checking, this job finished`);
+        if (flag) {
             break;
         }
-        page++;
+    }
+    if (!same) {
+        core.info(`There is no set label for the corresponding issue`);
     }
 }
 
-async function getPRs(page, per_page) {
-    let { data: pr, status: status } = await oc.rest.pulls.list({
+async function getPR(number) {
+    let { data: pr } = await oc.rest.pulls.get({
         ...repo,
         state: `open`,
-        per_page: per_page,
-        page: page
+        pull_number: number
     })
-    if (status != 200) {
-        return null
-    }
     return pr
 }
 
@@ -174,7 +152,7 @@ async function addReviewers(number, reviewers) {
     let str_reviewers = JSON.stringify({ reviewers: reviewers })
     core.info(`Add reviewers ${reviewers} to pull request ${number}`);
     // let { status: status } = await oc.rest.pulls.requestReviewers({
-    //     ...github.context.repo,
+    //     ...repo,
     //     pull_number: number,
     //     reviewers: str_reviewers
     // });
