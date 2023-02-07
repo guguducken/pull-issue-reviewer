@@ -43,6 +43,7 @@ async function run() {
             core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
             if (pr.body === null) {
                 core.info(`There is no body in is pr ${pr.number}..... skip`);
+                continue;
             }
             let num_issues = getReleatedIssueNumber(pr.body);
 
