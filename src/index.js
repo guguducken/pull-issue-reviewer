@@ -39,8 +39,9 @@ async function run() {
         core.info(`Get total pull: ${prs.length} of page ${page}`);
         //对每一个pr进行处理
         for (let i = 0; i < prs.length; i++) {
+
             const pr = prs[i];
-            core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
+            core.info(`\nStart to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
             if (pr.body === null) {
                 core.info(`There is no body in is pr ${pr.number}..... skip`);
                 continue;
@@ -96,7 +97,6 @@ async function run() {
                     break;
                 }
             }
-            core.info();
         }
 
         if (prs.length < per_page) {
