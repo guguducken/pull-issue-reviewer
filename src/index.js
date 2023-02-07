@@ -198,28 +198,45 @@ async function getIssueDetails(number) {
 }
 
 async function reviewersHasCheck(number) {
-    let { data: pull, status: status } = await oc.rest.pulls.listRequestedReviewers({
+    let { data: requested_reviewers, status: status } = await oc.rest.pulls.listRequestedReviewers({
         ...repo,
         pull_number: number
     });
 
-    let all = new Set();
+    let all = await getApproveReviewers(number);
     let arr = new Array();
+    for (let i = 0; i < requested_reviewers.users.length; i++) {
+        all.add(requested_reviewers.users[i].login);
+    }
+    let arr_all = Array.from(all);
     for (let i = 0; i < arr_reviewers.length; i++) {
         const reviewer = arr_reviewers[i];
-        for (let j = 0; j < pull.users.length; j++) {
-            const user = pull.users[j];
-            all.add(user.login);
-            if (user.login == reviewer) {
+        for (let j = 0; j < arr_all.length; j++) {
+            const user = arr_all[j];
+            if (user == reviewer) {
                 break;
             }
-            if (j + 1 == pull.users.length) {
+            if (j + 1 == arr_all.length) {
                 arr.push(reviewer);
             }
         }
     }
-    core.info(`All reviewers is: ` + Array.from(all));
+    core.info(`All reviewers is: ` + arr_all);
     return arr
+}
+
+async function getApproveReviewers(number) {
+    let { data: users } = await oc.rest.pulls.listReviews({
+        ...repo,
+        pull_number: number
+    });
+
+    let se = new Set();
+    for (let i = 0; i < users.length; i++) {
+        const user = users[i].user;
+        se.add(user.login);
+    }
+    return se;
 }
 
 run();
