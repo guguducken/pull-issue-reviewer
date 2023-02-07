@@ -96,6 +96,7 @@ async function run() {
                     break;
                 }
             }
+            core.info();
         }
 
         if (prs.length < per_page) {
