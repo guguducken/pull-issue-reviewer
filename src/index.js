@@ -173,7 +173,7 @@ async function addReviewers(number, reviewers) {
 function getReleatedIssueNumber(body) {
     const reg = /#(\d+)/igm
     const result = body.match(reg);
-    if (result.length == 0) {
+    if (result === null) {
         return [];
     }
     let ans = new Set();
