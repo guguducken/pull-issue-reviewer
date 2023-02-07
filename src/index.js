@@ -59,9 +59,7 @@ async function run() {
                 let flag = false;
                 let issue = await getIssueDetails(num);
                 if (issue.pull_request !== undefined) {
-                    continue;
-                }
-                if (issue.status != 200) {
+                    core.info(`This is a pr -- ${num}... skip`);
                     continue;
                 }
                 for (let k = 0; k < issue.data.labels.length; k++) {
