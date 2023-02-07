@@ -11,22 +11,17 @@ const reviewers = core.getInput(`reviewers`, { required: true });
 const arr_reviewers = reviewers.split(",");
 const mentioned_list = mentions.split(",");
 
-const repo = {
-    repo: "matrixone",
-    owner: "matrixorigin"
-}
-
+const repo = github.context.repo;
 const pull_request = github.context.payload.pull_request;
 
 
 const oc = github.getOctokit(token);
 
 async function run() {
-    // if (pull_request === undefined) {
-    //     throw new Error(`This workflow is not triag by pull request, check again`);
-    // }
-    // let number = pull_request.number;
-    let number = 7899;
+    if (pull_request === undefined) {
+        throw new Error(`This workflow is not triag by pull request, check again`);
+    }
+    let number = pull_request.number;
 
     core.info(`Start to find releate pull request...`)
     core.info(`Start to fetch the date of PR ${number} >>>>>>`);
@@ -135,12 +130,12 @@ async function notice_WeCom(type, message) {
         default:
             break;
     }
-    // let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
-    //     Headers: {
-    //         'Content-Type': 'application/json'
-    //     }
-    // });
-    // return resp.status;
+    let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
+        Headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    return resp.status;
     return 200
 }
 
@@ -151,14 +146,14 @@ async function addReviewers(number, reviewers) {
     }
     let str_reviewers = JSON.stringify({ reviewers: reviewers })
     core.info(`Add reviewers ${reviewers} to pull request ${number}`);
-    // let { status: status } = await oc.rest.pulls.requestReviewers({
-    //     ...repo,
-    //     pull_number: number,
-    //     reviewers: str_reviewers
-    // });
-    // if (status != 201) {
-    //     return false;
-    // }
+    let { status: status } = await oc.rest.pulls.requestReviewers({
+        ...repo,
+        pull_number: number,
+        reviewers: str_reviewers
+    });
+    if (status != 201) {
+        return false;
+    }
     return true;
 }
 
