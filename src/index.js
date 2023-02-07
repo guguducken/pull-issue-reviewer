@@ -54,6 +54,7 @@ async function run() {
                 core.info(`Get releated issues total: ${num_issues.length}, so skip this pull`);
                 continue;
             }
+            let same = false;
             for (let j = 0; j < num_issues.length; j++) {
                 const num = num_issues[j];
                 let flag = false;
@@ -66,6 +67,7 @@ async function run() {
                     const label = issue.data.labels[k];
                     if (label.id == id_label) {
                         let sum = 0
+                        same = true;
                         //增加reviewer
                         while (await addReviewers(pr.number, await reviewersHasCheck(pr.number)) == false) {
                             sum++
@@ -94,6 +96,9 @@ async function run() {
                 if (flag) {
                     break;
                 }
+            }
+            if (!same) {
+                core.info(`There is no set label for the corresponding issue`);
             }
         }
 
