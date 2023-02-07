@@ -11,7 +11,7 @@ const reviewers = core.getInput(`reviewers`, { required: true });
 const arr_reviewers = reviewers.split(",");
 const mentioned_list = mentions.split(",");
 
-github.context.repo = {
+const repo = {
     repo: "matrixone",
     owner: "matrixorigin"
 }
@@ -104,7 +104,7 @@ async function run() {
 
 async function getPRs(page, per_page) {
     let { data: pr, status: status } = await oc.rest.pulls.list({
-        ...github.context.repo,
+        ...repo,
         state: `open`,
         per_page: per_page,
         page: page
@@ -186,7 +186,7 @@ function getReleatedIssueNumber(body) {
 
 async function getIssueDetails(number) {
     let { data: issue, status: status } = await oc.rest.issues.get({
-        ...github.context.repo,
+        ...repo,
         issue_number: number
     });
     return { data: issue, status: status };
@@ -194,7 +194,7 @@ async function getIssueDetails(number) {
 
 async function reviewersHasCheck(number) {
     let { data: pull, status: status } = await oc.rest.pulls.listRequestedReviewers({
-        ...github.context.repo,
+        ...repo,
         pull_number: number
     });
 
