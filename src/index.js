@@ -39,9 +39,15 @@ async function run() {
         core.info(`Get total pull: ${prs.length} of page ${page}`);
         //对每一个pr进行处理
         for (let i = 0; i < prs.length; i++) {
-
             const pr = prs[i];
-            core.info(`\nStart to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
+
+            core.info(`\n${i + 1}`);
+            core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
+
+            if (pr.draft) {
+                core.info(`This pr is draft... skip`);
+                continue;
+            }
             if (pr.body === null) {
                 core.info(`There is no body in is pr ${pr.number}..... skip`);
                 continue;
