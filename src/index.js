@@ -19,11 +19,11 @@ const oc = github.getOctokit(token);
 
 async function run() {
     if (pull_request === undefined) {
-        throw new Error(`This workflow is not triag by pull request, check again`);
+        core.info(`This workflow is not triag by pull request, check again`);
+        return;
     }
     let number = pull_request.number;
 
-    core.info(`Start to find releate pull request...`)
     core.info(`Start to fetch the date of PR ${number} >>>>>>`);
     let pr = await getPR(number);
 
@@ -136,7 +136,6 @@ async function notice_WeCom(type, message) {
         }
     });
     return resp.status;
-    return 200
 }
 
 //reviewers是一个数组
@@ -208,17 +207,25 @@ async function reviewersHasCheck(number) {
 }
 
 async function getApproveReviewers(number) {
-    let { data: users } = await oc.rest.pulls.listReviews({
+    let { data: reivews } = await oc.rest.pulls.listReviews({
         ...repo,
         pull_number: number
     });
 
     let se = new Set();
-    for (let i = 0; i < users.length; i++) {
-        const user = users[i].user;
+    for (let i = 0; i < reivews.length; i++) {
+        const user = reivews[i].user;
         se.add(user.login);
     }
     return se;
 }
 
-run();
+async function main() {
+    try {
+        await run();
+    } catch (error) {
+        core.setFailed(err.message);
+    }
+}
+
+main();
