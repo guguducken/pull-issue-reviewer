@@ -68,7 +68,7 @@ async function run() {
                     }
                 }
                 //编写message
-                let mess = `This PR ${pr.number} needs to be well documented and its associated issue is ${num} `
+                let mess = `This PR [${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is [${num}](issue.data.html_url) `
 
 
                 //企业微信通知
