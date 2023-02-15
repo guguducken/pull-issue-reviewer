@@ -224,7 +224,7 @@ async function main() {
     try {
         await run();
     } catch (error) {
-        core.setFailed(err.message);
+        core.setFailed(error.message);
     }
 }
 
