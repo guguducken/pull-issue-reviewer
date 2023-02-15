@@ -143,12 +143,12 @@ async function addReviewers(number, reviewers) {
     if (reviewers.length == 0) {
         return true
     }
-    let str_reviewers = JSON.stringify({ reviewers: reviewers })
+//     let str_reviewers = JSON.stringify({ reviewers: reviewers })
     core.info(`Add reviewers ${reviewers} to pull request ${number}`);
     let { status: status } = await oc.rest.pulls.requestReviewers({
         ...repo,
         pull_number: number,
-        reviewers: str_reviewers
+        reviewers: reviewers
     });
     if (status != 201) {
         return false;
