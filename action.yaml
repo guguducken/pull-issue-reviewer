@@ -6,7 +6,7 @@ inputs:
   token_action:
     description: "The user GitHub token for get data"
     required: true
-  id_label:
+  id_labels:
     description: "The id of label which in issue"
     default: ""
     required: true
@@ -17,9 +17,6 @@ inputs:
   mentions:
     description: "the mentions"
     required: false
-  reviewers:
-    description: "the reviewers which need add to pull request"
-    required: true
 
 runs:
   using: "node16"
