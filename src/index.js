@@ -3,12 +3,12 @@ const github = require('@actions/github');
 const axios = require('axios');
 
 const token = core.getInput(`token_action`, { required: true });
-const id_labels = core.getInput(`id_labels`, { required: true });
+const id_label = core.getInput(`id_label`, { required: true });
 const uri_hook = core.getInput(`uri_notice`, { required: true });
 const mentions = core.getInput(`mentions`, { required: true });
 
 const mentioned_list = mentions.split(",");
-const arr_id_labels = id_labels.split(",");
+const arr_id_labels = id_label.split(",");
 
 
 const oc = github.getOctokit(token);
