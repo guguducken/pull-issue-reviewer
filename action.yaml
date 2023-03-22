@@ -1,4 +1,4 @@
-name: Pull Issue Add Reviewers
+name: Issue Close Check
 description: Auto add reviewers for a pull request which associate a special issue
 author: guguducken
 
