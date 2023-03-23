@@ -25,7 +25,7 @@ async function run() {
     let number = pull_request.number;
 
     core.info(`Start to fetch the date of PR ${number} >>>>>>`);
-    let pr = await getPR(number);
+    let pr = await getPR(...repo,number);
 
     core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
 
@@ -46,56 +46,79 @@ async function run() {
         return;
     }
     let same = false;
+    let mess = `This PR[${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is: `
     for (let j = 0; j < num_issues.length; j++) {
         const num = num_issues[j];
-        let flag = false;
-        let issue = await getIssueDetails(num);
-        if (issue.pull_request !== undefined) {
+        let {data:issue_start} = await getIssueDetails(...repo,num);
+        if (issue_start.pull_request !== undefined) {
             core.info(`This is a pr -- ${num}... skip`);
             continue;
         }
-        for (let k = 0; k < issue.data.labels.length; k++) {
-            const label = issue.data.labels[k];
-            if (label.id == id_label) {
-                let sum = 0
-                same = true;
-                //增加reviewer
-                while (await addReviewers(pr.number, await reviewersHasCheck(pr.number)) == false) {
-                    sum++
-                    if (sum == 10) {
-                        core.info(`Try add reviewers for pull ${pr.number} and issue ${num} ten times... skip`);
-                        break;
-                    }
+        let same_t = false
+        let associated = new Array()
+        let subIssue = issue_start
+        let issues = new Array(issue_start)
+        let isSub = isSubtask(issue_start.title)
+        if (isSub) {
+            issues = await getParentIssue(issue_start.body)
+        }
+        for (let i = 0; i < issues.length; i++) {
+            const issue = issues[i];
+            for (let k = 0; k < issue.labels.length; k++) {
+                const label = issue.labels[k];
+                if (label.id == id_label) {
+                    associated.push(issue)
+                    same = true;
+                    same_t = true
+                    break;
                 }
-                //编写message
-                let mess = `This PR [${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is [${num}](${issue.data.html_url})`
-
-
-                //企业微信通知
-                sum = 0;
-                while (await notice_WeCom(`markdown`, mess) != 200) {
-                    sum++;
-                    if (sum == 10) {
-                        core.info(`Try to notice by WeCom for pull ${pr.number} and issue ${num} ten times... skip`);
-                        break;
-                    }
+            }
+        }
+        if (same_t) {
+            if (isSub) {
+                mess += `[${subIssue.number}](${subIssue.html_url}) and parent issue is: `
+                for (let i = 0; i < associated.length; i++) {
+                    const issue = associated[i];
+                    mess += `[${issue.number}](${issue.html_url}),`
                 }
-                flag = true;
+            } else {
+                mess += `[${subIssue.number}](${subIssue.html_url})` 
+            }
+        }
+    }
+    if (same) {
+        let sum = 0
+        while (await addReviewers(...repo, pr.number, await reviewersHasCheck(pr.number)) == false) {
+            sum++
+            if (sum == 10) {
+                core.info(`Try add reviewers for pull ${pr.number} and issue ${num} ten times... skip`);
                 break;
             }
         }
-        if (flag) {
-            break;
+        //编写message
+        // let mess = `This PR [${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is [${subIssue.number}](${subIssue.html_url})`
+        // if (isSub) {
+        //     mess += ` and the parent issue is [${issue.repository.full_name}/${issue.number}](${issue.html_url})`
+        // }
+    
+        //企业微信通知
+        sum = 0;
+        while (await notice_WeCom(`markdown`, mess) != 200) {
+            sum++;
+            if (sum == 10) {
+                core.info(`Try to notice by WeCom for pull ${pr.number} and issue ${num} ten times... skip`);
+                break;
+            }
         }
-    }
-    if (!same) {
+    }else {
         core.info(`There is no set label for the corresponding issue`);
     }
 }
 
-async function getPR(number) {
+async function getPR({ owner, repo },number) {
     let { data: pr } = await oc.rest.pulls.get({
-        ...repo,
+        owner: owner,
+        repo: repo,
         state: `open`,
         pull_number: number
     })
@@ -130,23 +153,25 @@ async function notice_WeCom(type, message) {
         default:
             break;
     }
-    let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
-        Headers: {
-            'Content-Type': 'application/json'
-        }
-    });
-    return resp.status;
+    // let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
+    //     Headers: {
+    //         'Content-Type': 'application/json'
+    //     }
+    // });
+    // return resp.status;
+    return 200
 }
 
 //reviewers是一个数组
-async function addReviewers(number, reviewers) {
+async function addReviewers({ owner, repo },number, reviewers) {
     if (reviewers.length == 0) {
         return true
     }
 //     let str_reviewers = JSON.stringify({ reviewers: reviewers })
     core.info(`Add reviewers ${reviewers} to pull request ${number}`);
     let { status: status } = await oc.rest.pulls.requestReviewers({
-        ...repo,
+        owner: owner,
+        repo:repo,
         pull_number: number,
         reviewers: reviewers
     });
@@ -170,17 +195,58 @@ function getReleatedIssueNumber(body) {
     return Array.from(ans)
 }
 
-async function getIssueDetails(number) {
+async function getParentIssue(body) {
+    let issues = new Set()
+    const totalReg = /^### Parent Issue(.*)### Detail of Subtask/igms
+    let result = totalReg.exec(body)
+    if (result === null || result[1].length == 0) {
+        return Array.from(issues)
+    }
+    body = result[1]
+
+    const pubReg = /#(\d+)/img
+    result = body.match(pubReg)
+    if (result !== null) {
+        if (result.length != 0) {
+            for (let i = 0; i < result.length; i++) {
+                const e = result[i];
+                issues.add((await getIssueDetails(...repo,e.substring(1))).data)
+            }
+        }
+    }
+
+
+    const priReg = /https:\/\/github.com\/(.+)\/(.+)\/issues\/(\d+)/igm
+    result = body.matchAll(priReg)
+    if (result === null) {
+        return Array.from(issues)
+    }
+    if (result.length != 0) {
+        for (let i = 0; i < result.length; i++) {
+            const res = result[i];
+            issues.add((await getIssueDetails({owner: res[1],repo: res[2]},res[3])).data)
+        }
+    }
+    return Array.from(issues)
+}
+
+function isSubtask(title) {
+    return /^\[Subtask\]:/igm.test(title)
+}
+
+async function getIssueDetails({ owner, repo },number) {
     let { data: issue, status: status } = await oc.rest.issues.get({
-        ...repo,
+        owner: owner,
+        repo:repo,
         issue_number: number
     });
     return { data: issue, status: status };
 }
 
-async function reviewersHasCheck(number) {
+async function reviewersHasCheck({ owner, repo },number) {
     let { data: requested_reviewers, status: status } = await oc.rest.pulls.listRequestedReviewers({
-        ...repo,
+        owner: owner,
+        repo: repo,
         pull_number: number
     });
 
@@ -206,9 +272,10 @@ async function reviewersHasCheck(number) {
     return arr
 }
 
-async function getApproveReviewers(number) {
+async function getApproveReviewers({ owner, repo },number) {
     let { data: reivews } = await oc.rest.pulls.listReviews({
-        ...repo,
+        owner: owner,
+        repo:repo,
         pull_number: number
     });
 
