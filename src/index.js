@@ -10,6 +10,7 @@ const reviewers = core.getInput(`reviewers`, { required: true });
 
 const arr_reviewers = reviewers.split(",");
 const mentioned_list = mentions.split(",");
+const arr_name_label = name_label.split(",");
 
 const repo = github.context.repo;
 const pull_request = github.context.payload.pull_request;
@@ -45,60 +46,81 @@ async function run() {
         core.info(`Get releated issues total: ${num_issues.length}, so skip this pull`);
         return;
     }
-    let same = false;
-    let mess = `This PR[${pr.base.repo.full_name}/${pr.number}](${pr.html_url}) needs to be well documented. `
-    for (let j = 0; j < num_issues.length; j++) {
-        const num = num_issues[j];
-        let {data:issue_start} = await getIssueDetails(repo,num);
-        if (issue_start.pull_request !== undefined) {
+    let mess = `This PR[${pr.base.repo.name}/${pr.number}](${pr.html_url}) needs to be well documented.`
+    let state_total = false
+
+    for (let num of num_issues) {
+        let {data:issue} = await getIssueDetails(repo,num);
+        if (issue.pull_request !== undefined) {
             core.info(`This is a pr -- ${num}... skip`);
             continue;
         }
-        let same_t = false
-        let associated = new Array()
-        let subIssue = issue_start
-        let issues = new Array(issue_start)
-        let isSub = isSubtask(issue_start.title)
+        let state_self = false;
+        let state_parent = false;
+
+        //check itself
+        let flag = false
+        for (let label of issue.labels) {
+            for (let i = 0; i < arr_name_label.length; i++) {
+                if (label.name == arr_name_label[i]) {
+                    state_self = true
+                    flag = true
+                    break
+                }
+            }
+            if (flag) {
+                break
+            }
+        }
+
+        //check parents
+        let parents = new Set();
+        let isSub = isSubtask(issue.title)
         if (isSub) {
-            core.info(`This issue ${issue_start.number} is a subtaske, start to find parent issues`)
-            issues = await getParentIssue(issue_start.body)
-            core.info(`The length of parent issue is: ${issues.length}`)
-        } else {
-            core.info(`This issue ${issue_start.number} is not a subtask, so check issue self`)
+            core.info(`This issue ${issue.number} is a subtask, start to check parents issue`)
+            let issues = await getParentIssue(issue.body)
+            for (let issue_t of issues) {
+                core.info(`Start to check parents issue ${issue_t.number}`);
+                let flag = false
+                for (let label of issue_t.labels) {
+                    for (let i = 0; i < arr_name_label.length; i++) {
+                        let name = arr_name_label[i];
+                        if (label.name == name) {
+                            parents.add(issue_t)
+                            flag = true
+                            state_parent = true
+                            break
+                        }
+                    }
+                    if (flag) {
+                        break
+                    }
+                }
+                if (flag) {
+                    core.info(`This parent issue ${issue_t.number} meet the conditions, add it to message`);
+                } else {
+                    core.info(`This parent issue ${issue_t.number} does not meet the conditions`);
+                    
+                }
+            }
         }
-        for (let i = 0; i < issues.length; i++) {
-            const issue = issues[i];
-            core.info(`Start to check issue ${issue.number} --- ${issue.title}`)
-            for (let k = 0; k < issue.labels.length; k++) {
-                const label = issue.labels[k];
-                if (label.name == name_label) {
-                    associated.push(issue)
-                    same = true;
-                    same_t = true
-                    break;
+
+        //gen message
+        if (state_self || state_parent) {
+            state_total = true
+            mess += ` The associated issue is: [${issue.repository_url.split(`/`).slice(-1)}/${issue.number}](${issue.html_url})`
+            if (state_parent) {
+                mess += ` and the reletaed parent issue is: `
+                for (let parent of parents) {
+                    mess += `[${parent.repository_url.split(`/`).slice(-1)}/${parent.number}](${parent.html_url}),`
                 }
+                mess = mess.substring(0, mess.length - 1) + `;`
             }
-            if (same_t) {
-                core.info(`issue ${issue.number} have the setted labels, goal aimed`)
-            } else {
-                core.info(`There is no set label for the corresponding issue ${issue.number}`)
-            }
-        }
-        if (same_t) {
-            mess += `The associated issue is: [${subIssue.repository_url.split(`/`).slice(-1)}/${subIssue.number}](${subIssue.html_url})`
-            if (isSub) {
-                mess += ` and parent issue is: `
-                for (let i = 0; i < associated.length; i++) {
-                    const issue = associated[i];
-                    mess += `[${issue.repository_url.split(`/`).slice(-1)}/${issue.number}](${issue.html_url}),`
-                }
-                if (associated.length != 0) {
-                    mess = mess.substring(0,mess.length - 1) +  `;`
-                }
-            }
+
         }
     }
-    if (same) {
+    //send message and add reviewers
+    if (state_total) {
         let sum = 0
         while (await addReviewers(repo, pr.number, await reviewersHasCheck(repo,pr.number)) == false) {
             sum++
@@ -112,6 +134,9 @@ async function run() {
 
         //企业微信通知
         sum = 0;
+        if (mess[mess.length - 1] == ';') {
+            mess = mess.substring(0, mess.length - 1)
+        }
 
         while (await notice_WeCom(`markdown`, mess) != 200) {
             sum++;
@@ -304,4 +329,4 @@ async function main() {
     }
 }
 
-main();
+run();
