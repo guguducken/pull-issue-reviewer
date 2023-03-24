@@ -6,8 +6,8 @@ inputs:
   token_action:
     description: "The user GitHub token for get data"
     required: true
-  id_label:
-    description: "The id of label which in issue"
+  name_label:
+    description: "The name of label which in issue"
     default: ""
     required: true
   uri_notice:

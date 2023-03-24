@@ -3,7 +3,7 @@ const github = require('@actions/github');
 const axios = require('axios');
 
 const token = core.getInput(`token_action`, { required: true });
-const id_label = core.getInput(`id_label`, { required: true });
+const name_label = core.getInput(`name_label`, { required: true });
 const uri_hook = core.getInput(`uri_notice`, { required: true });
 const mentions = core.getInput(`mentions`, { required: true });
 const reviewers = core.getInput(`reviewers`, { required: true });
@@ -25,7 +25,7 @@ async function run() {
     let number = pull_request.number;
 
     core.info(`Start to fetch the date of PR ${number} >>>>>>`);
-    let pr = await getPR(...repo,number);
+    let pr = await getPR(repo,number);
 
     core.info(`Start to check pull ${pr.number}, title: ${pr.title} >>>>>>`);
 
@@ -46,10 +46,10 @@ async function run() {
         return;
     }
     let same = false;
-    let mess = `This PR[${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is: `
+    let mess = `This PR[${pr.base.repo.full_name}/${pr.number}](${pr.html_url}) needs to be well documented. `
     for (let j = 0; j < num_issues.length; j++) {
         const num = num_issues[j];
-        let {data:issue_start} = await getIssueDetails(...repo,num);
+        let {data:issue_start} = await getIssueDetails(repo,num);
         if (issue_start.pull_request !== undefined) {
             core.info(`This is a pr -- ${num}... skip`);
             continue;
@@ -60,49 +60,59 @@ async function run() {
         let issues = new Array(issue_start)
         let isSub = isSubtask(issue_start.title)
         if (isSub) {
+            core.info(`This issue ${issue_start.number} is a subtaske, start to find parent issues`)
             issues = await getParentIssue(issue_start.body)
+            core.info(`The length of parent issue is: ${issues.length}`)
+        } else {
+            core.info(`This issue ${issue_start.number} is not a subtask, so check issue self`)
         }
         for (let i = 0; i < issues.length; i++) {
             const issue = issues[i];
+            core.info(`Start to check issue ${issue.number} --- ${issue.title}`)
             for (let k = 0; k < issue.labels.length; k++) {
                 const label = issue.labels[k];
-                if (label.id == id_label) {
+                if (label.name == name_label) {
                     associated.push(issue)
                     same = true;
                     same_t = true
                     break;
                 }
             }
+            if (same_t) {
+                core.info(`issue ${issue.number} have the setted labels, goal aimed`)
+            } else {
+                core.info(`There is no set label for the corresponding issue ${issue.number}`)
+            }
         }
         if (same_t) {
+            mess += `The associated issue is: [${subIssue.repository_url.split(`/`).slice(-1)}/${subIssue.number}](${subIssue.html_url})`
             if (isSub) {
-                mess += `[${subIssue.number}](${subIssue.html_url}) and parent issue is: `
+                mess += ` and parent issue is: `
                 for (let i = 0; i < associated.length; i++) {
                     const issue = associated[i];
-                    mess += `[${issue.number}](${issue.html_url}),`
+                    mess += `[${issue.repository_url.split(`/`).slice(-1)}/${issue.number}](${issue.html_url}),`
                 }
-            } else {
-                mess += `[${subIssue.number}](${subIssue.html_url})` 
+                if (associated.length != 0) {
+                    mess = mess.substring(0,mess.length - 1) +  `;`
+                }
             }
         }
     }
     if (same) {
         let sum = 0
-        while (await addReviewers(...repo, pr.number, await reviewersHasCheck(pr.number)) == false) {
+        while (await addReviewers(repo, pr.number, await reviewersHasCheck(repo,pr.number)) == false) {
             sum++
             if (sum == 10) {
                 core.info(`Try add reviewers for pull ${pr.number} and issue ${num} ten times... skip`);
                 break;
             }
         }
-        //编写message
-        // let mess = `This PR [${pr.number}](${pr.html_url}) needs to be well documented and its associated issue is [${subIssue.number}](${subIssue.html_url})`
-        // if (isSub) {
-        //     mess += ` and the parent issue is [${issue.repository.full_name}/${issue.number}](${issue.html_url})`
-        // }
-    
+        core.info(`add reviewer finished`)
+
+
         //企业微信通知
         sum = 0;
+
         while (await notice_WeCom(`markdown`, mess) != 200) {
             sum++;
             if (sum == 10) {
@@ -153,13 +163,12 @@ async function notice_WeCom(type, message) {
         default:
             break;
     }
-    // let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
-    //     Headers: {
-    //         'Content-Type': 'application/json'
-    //     }
-    // });
-    // return resp.status;
-    return 200
+    let resp = await axios.post(uri_hook, JSON.stringify(notice_payload), {
+        Headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    return resp.status;
 }
 
 //reviewers是一个数组
@@ -167,7 +176,6 @@ async function addReviewers({ owner, repo },number, reviewers) {
     if (reviewers.length == 0) {
         return true
     }
-//     let str_reviewers = JSON.stringify({ reviewers: reviewers })
     core.info(`Add reviewers ${reviewers} to pull request ${number}`);
     let { status: status } = await oc.rest.pulls.requestReviewers({
         owner: owner,
@@ -210,7 +218,7 @@ async function getParentIssue(body) {
         if (result.length != 0) {
             for (let i = 0; i < result.length; i++) {
                 const e = result[i];
-                issues.add((await getIssueDetails(...repo,e.substring(1))).data)
+                issues.add((await getIssueDetails(repo,e.substring(1))).data)
             }
         }
     }
@@ -218,6 +226,7 @@ async function getParentIssue(body) {
 
     const priReg = /https:\/\/github.com\/(.+)\/(.+)\/issues\/(\d+)/igm
     result = body.matchAll(priReg)
+    result = Array.from(result)
     if (result === null) {
         return Array.from(issues)
     }
@@ -250,7 +259,7 @@ async function reviewersHasCheck({ owner, repo },number) {
         pull_number: number
     });
 
-    let all = await getApproveReviewers(number);
+    let all = await getApproveReviewers({ owner, repo },number);
     let arr = new Array();
     for (let i = 0; i < requested_reviewers.users.length; i++) {
         all.add(requested_reviewers.users[i].login);
